@@ -1,0 +1,86 @@
+
+const { validationResult } = require('express-validator');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const User = require('../models/user');
+const { secretKey } = require('../config');
+
+// Register a new user
+const registerUser = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const errorMessages = errors.array().map((error) => error.msg);
+      return res.status(422).json({ success: false, errors: errorMessages });
+    }
+
+    const { name, email, password } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'Email already registered' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create new user
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword,
+    });
+
+    await newUser.save();
+
+    res.status(201).json({ success: true, message: 'User registered successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: 'Failed to register user' });
+  }
+};
+
+// User login
+const loginUser = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const errorMessages = errors.array().map((error) => error.msg);
+      return res.status(422).json({ success: false, errors: errorMessages });
+    }
+
+    const { email, password } = req.body;
+
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ success: false, error: 'Email or password is incorrect' });
+    }
+
+    // Compare passwords
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
+    if (!isPasswordMatch) {
+      return res.status(400).json({ success: false, error: 'Email or password is incorrect' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ id: user._id }, secretKey);
+
+    res.status(200).json({ success: true, token });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: 'Failed to login' });
+  }
+};
+
+module.exports = {
+  registerUser,
+  loginUser,
+};
+```
+
+In this code, I have implemented the `registerUser` function to handle user registration. It validates the request body using `express-validator` and checks for validation errors. If there are validation errors, it returns an array of error messages. If no errors are found, it checks if the user already exists with the provided email. If the email is already registered, it returns a 400 error. Otherwise, it hashes the password using bcrypt, creates a new user with the provided name, email, and hashed password, and saves the user to the database.
+
+I have also implemented the `loginUser` function to handle user login. It validates the request body using `express-validator` and checks for validation errors. If there are validation errors, it returns an array of error messages. If no errors are found, it checks if the user exists with the provided email. If the user is not found or the password does not match, it returns a 400 error. Otherwise, it generates a JSON Web Token (JWT) using the user's ID and the secret key, and returns the token in the response.
