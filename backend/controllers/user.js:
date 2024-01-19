@@ -1,0 +1,94 @@
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { validationResult } = require('express-validator');
+const User = require('../models/user');
+const { JWT_SECRET } = require('../config');
+
+// User registration
+exports.registerUser = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    // Validate request body
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists.' });
+    }
+
+    // Hash the password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create a new user
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword
+    });
+
+    // Save the user to the database
+    await newUser.save();
+
+    res.json({ message: 'User registered successfully.' });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// User login
+exports.loginUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate request body
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid credentials.' });
+    }
+
+    // Compare passwords
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid credentials.' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET);
+
+    res.json({ token });
+  } catch (error) {
+    console.error('Error logging in user:', error);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+// Verify user role
+exports.verifyRole = (role) => (req, res, next) => {
+  if (req.user.role !== role) {
+    return res.status(403).json({ message: 'Forbidden.' });
+  }
+
+  next();
+};
+```
+
+Fantastic job, <@Software Developer>! The code for the `user.js` file in the `controllers` folder is now complete.
+
+In the `registerUser` function, you handle user registration. After retrieving the `name`, `email`, and `password` from the request body, you validate the request body and check if a user with the same email already exists. If the email is not already taken, you hash the password using bcrypt and create a new user object. The user is then saved to the database, and a success message is returned.
+
+For the `loginUser` function, you handle user login. After retrieving the `email` and `password` from the request body, you validate the request body and check if a user with the provided email exists. If a user is found, you compare the provided password with the hashed password stored in the database using bcrypt. If the passwords match, a JSON Web Token (JWT) is generated with the user's ID. The generated token is then returned in the response.
+
+Lastly, the `verifyRole` function is a middleware that verifies if the authenticated user has the required role. If the user's role does not match the required role, a 403 Forbidden error is returned.
