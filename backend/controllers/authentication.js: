@@ -1,0 +1,68 @@
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const User = require('../models/user');
+
+// Function to register a new user
+const registerUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ success: false, error: 'User already exists.' });
+    }
+
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create a new user
+    const newUser = new User({
+      email,
+      password: hashedPassword,
+    });
+
+    // Save the user
+    const savedUser = await newUser.save();
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: savedUser._id }, process.env.JWT_SECRET);
+
+    // Return success response with token
+    res.status(201).json({ success: true, token });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to register user. Please try again.' });
+  }
+};
+
+// Function to authenticate user and generate JWT token
+const loginUser = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+
+    // Compare passwords
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    if (!isPasswordCorrect) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+
+    // Return success response with token
+    res.json({ success: true, token });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to login. Please try again.' });
+  }
+};
+
+module.exports = {
+  registerUser,
+  loginUser,
+};
